@@ -8,7 +8,7 @@ enum _State {
 type TResolver<T> = (value: T) => void
 type TRejector<K> = (reason: K) => void
 type TExecutor<T, K> = (resolve: TResolver<T>, reject: TRejector<K>) => void
-type TThenFunctionHandler<T> = (value: T) => void
+type TThenFunctionHandler<T> = (value: T) => {} | void
 type TCatchFunctionHandler<K> = (reason: K) => void
 type TPromiseThen<T> = (handlerFn: TThenFunctionHandler<T>) => {}
 type TPromiseCatch<K> = (handlerFn: TCatchFunctionHandler<K>) => {}
@@ -30,6 +30,11 @@ class MyPromise<T, K> {
     private _resolverFn: TResolver<T> = (value: T) => {
         this._state = _State.FULFILLED;
         this._value = value;
+
+        if (value instanceof MyPromise) {
+            return value.then(this._resolverFn.bind(this)); // flattening the promise when a value as a promise is passed to the resolver function. Especially in promise chaining
+        }
+
         this._successHandlers.forEach((fn: TThenFunctionHandler<T>) => {
             fn(value);
         })
@@ -47,7 +52,8 @@ class MyPromise<T, K> {
 
     public then(handlerFn: TThenFunctionHandler<T>) {
         if (this._state === _State.FULFILLED) {
-            handlerFn(this._value);
+            const _promise = new MyPromise((resolve) => resolve(handlerFn(this._value)));
+            return _promise;
         }
         else {
             this._successHandlers.push(handlerFn);
@@ -84,7 +90,15 @@ const mypromise = new MyPromise((resolve, reject) => {
 mypromise
     .then((value) => {
         console.log(value);
+        return new MyPromise((resolve) => {
+            resolve("Is this chaining working");
+        })
     })
+    .then((value) => {
+        console.log(value);
+        return "This was a good practice."
+    })
+    .then(value => console.log(value))
     .catch((reason) => {
         console.log(reason);
     })
